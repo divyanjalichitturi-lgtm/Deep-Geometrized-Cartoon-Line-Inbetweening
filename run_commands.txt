@@ -1,0 +1,17 @@
+STEP 1 — install
+python -m pip install -r requirements.txt
+
+STEP 2 — prepare 15 ML240 sequences
+python prepare_ml240.py --source "C:\ML240_SOURCE\ml240data" --output dataset --train 10 --val 2 --test 3 --size 256
+
+STEP 3 — validate
+python validate_dataset.py
+
+STEP 4 — train
+python train.py
+
+STEP 5 — test
+python test.py
+
+STEP 6 — app
+streamlit run app.py
