@@ -1,162 +1,357 @@
 # DeepLine AI — Geometry-Aware Cartoon Line Inbetweening
 
-An ML240-based geometry-aware deep learning implementation inspired by AnimeInbet. The project predicts a candidate middle line-art frame from two endpoint drawings and uses geometry maps during learning and inference.
+A geometry-aware deep learning project that predicts an intermediate cartoon line-art frame from two endpoint drawings. The implementation uses ML240 geometry information and is inspired by AnimeInbet (ICCV 2023).
 
-> This is a practical student-scale implementation. It is **not an exact reproduction** of the ICCV 2023 AnimeInbet architecture.
+> **Note:** This is a practical student-scale implementation inspired by AnimeInbet. It is not an exact reproduction of the original ICCV 2023 architecture.
 
-## Problem and objectives
+## 1. Project Overview
 
-Cartoon animation requires drawings between key poses. This project learns to reconstruct the middle frame from the preceding and following raster frames while incorporating vertex and graph-edge cues. Its objectives are to preserve the existing ML240 preparation workflow, train on real geometry labels, evaluate against held-out frames, and expose inference and diagnostics through a research-oriented application.
+Cartoon animation requires intermediate drawings between two keyframes to create smooth motion. Manually drawing these intermediate frames can be time-consuming.
 
-## Research inspiration and dataset
+DeepLine AI aims to automate this process using a geometry-aware deep learning model.
 
-The work is inspired by *Deep Geometrized Cartoon Line Inbetweening* (AnimeInbet, ICCV 2023). The original method contains correspondence and geometry reasoning beyond this student implementation.
+The application accepts two endpoint cartoon drawings and predicts a candidate middle frame using raster and geometry features.
 
-Training uses the prepared reduced subset of ML240 / MixamoLine240: **10 training, 2 validation, and 3 testing sequences**. Splits are at sequence level; adjacent frames within a sequence form triples, and a source sequence is assigned to one split only. Training reads the ML240 vertex and connection JSON labels. At upload inference, geometry is estimated from the raster's contours and explicitly marked as estimated rather than ground truth.
+### Objectives
 
-The existing prepared `dataset/` is retained. It does not need to be recreated to use this version.
+- Predict an intermediate cartoon line-art frame from two endpoint drawings.
+- Incorporate vertex and graph-edge information into the learning process.
+- Train using ML240 geometry annotations.
+- Evaluate predictions against held-out ground-truth frames.
+- Provide an interactive Streamlit application for inference and visualization.
 
-## Architecture and pipeline
+## 2. Research Inspiration and Dataset
 
-The verified checkpoint uses the `GeometryAwareDualBranchNet` (Geometry-Aware Dual-Branch Residual U-Net), with two streams:
+This project is inspired by:
 
-- Raster stream: start line map, end line map, and interpolation time.
-- Geometry stream: endpoint vertex heatmaps and graph-edge maps.
-- Residual blocks use channel attention. Gated fusion combines both streams at multiple scales; skip connections feed a decoder and one-channel line-intensity reconstruction head.
+**Deep Geometrized Cartoon Line Inbetweening (AnimeInbet), ICCV 2023.**
 
-The model emits a 256 × 256 grayscale intensity map, where larger values represent dark line pixels. Training combines L1 reconstruction, weighted MSE, finite-difference edge loss, and a differentiable local SSIM-style structural loss. Weights are set in `config.py`; the SSIM term may be disabled with `--ssim-weight 0`.
+The implementation uses a reduced subset of ML240 / MixamoLine240.
 
-Preprocessing preserves aspect ratio for uploaded images using white letterboxing. Dataset frames are resized to the fixed training canvas. The model output is cropped from the letterbox and restored to the start frame's original resolution. The output conversion maps the trained sigmoid [0, 1] line-strength convention directly to grayscale (high means dark), with no percentile stretch, gamma adjustment, threshold, or added geometry. Reported metrics are calculated on the untouched raw prediction. Run `python diagnose_inference.py --index 0` to save raw prediction values, the display PNG, and a comparison using the same estimated-geometry path as Streamlit.
+### Dataset configuration
 
-Checkpoint loading and forward passes are centralized in `src/inference.py`. Both `test.py` and Streamlit call the same strict loader and shared prediction functions, which return the same validated dictionary contract. Uploaded-pair prediction returns `prediction`, `generated_frame`, `inference_seconds`, `prediction_stats`, `image_stats`, and `model_input`. The upload path uses the shared project preprocessor to estimate inference-time geometry, then assembles the same seven-channel model input contract used by training.
+| Split | Number of sequences |
+|---|---:|
+| Training | 10 |
+| Validation | 2 |
+| Testing | 3 |
 
-## Installation
+The dataset is divided at the sequence level to prevent frames from the same source sequence from appearing in multiple splits.
 
-Use Python 3.12 where available. From the project directory:
+Training uses ML240 vertex and connection JSON annotations to construct geometry features.
+
+**Important dataset note:** The prepared dataset is not included in this GitHub repository. You must prepare it locally using the provided preparation script and the ML240 source files.
+
+## 3. Model Architecture
+
+The project uses a geometry-aware deep learning network designed to combine raster information and geometric structure.
+
+The model uses two feature streams:
+
+### Raster stream
+- Starting line-art frame.
+- Ending line-art frame.
+- Interpolation time.
+
+### Geometry stream
+- Endpoint vertex heatmaps.
+- Graph-edge maps.
+
+The two streams are combined through gated feature fusion. Residual blocks, channel attention, skip connections, and a decoder are used to reconstruct the intermediate line-art image.
+
+The model produces a 256 × 256 grayscale intensity map.
+
+The implementation uses geometry features during training and estimates geometry from uploaded raster images during application inference.
+
+## 4. Training and Loss Functions
+
+Training combines multiple objectives to improve reconstruction quality and structural consistency.
+
+The loss components include:
+
+- L1 reconstruction loss.
+- Weighted Mean Squared Error (MSE).
+- Finite-difference edge loss.
+- Differentiable local SSIM-style structural loss.
+
+Loss weights are configured in `config.py`.
+
+The SSIM-style term can be disabled using:
+
+```bash
+--ssim-weight 0
+```
+
+Training uses AdamW optimization, reproducible random seeds, validation-based learning-rate reduction, checkpoint saving, and early stopping.
+
+## 5. Project Features
+
+- Geometry-aware cartoon frame prediction.
+- ML240 vertex and graph-edge feature processing.
+- Shared inference functions for testing and application prediction.
+- Strict checkpoint loading.
+- Image preprocessing with aspect-ratio preservation.
+- Raw prediction diagnostics.
+- Held-out evaluation metrics.
+- Interactive Streamlit interface.
+
+### Streamlit application pages
+
+1. Home
+2. Inbetweening Studio
+3. How It Works
+4. Geometry Analyzer
+5. Model & Performance
+6. About
+
+Users can upload endpoint images, preview the inputs, generate an intermediate frame, inspect diagnostics, and download the generated PNG.
+
+Supported image formats include PNG, JPG, JPEG, BMP, and WebP when supported by the installed Pillow version.
+
+## 6. Technologies Used
+
+- Python
+- PyTorch
+- NumPy
+- OpenCV
+- Pillow
+- Streamlit
+- Matplotlib
+- Scikit-image
+
+## 7. Installation
+
+Use Python 3.12 where available.
+
+Clone the repository:
+
+```bash
+git clone https://github.com/divyanjalichitturi-lgtm/Deep-Geometrized-Cartoon-Line-Inbetweening.git
+```
+
+Move into the project directory:
+
+```bash
+cd Deep-Geometrized-Cartoon-Line-Inbetweening
+```
+
+Create a virtual environment:
+
+```bash
+python -m venv .venv
+```
+
+Activate it on Windows PowerShell:
 
 ```powershell
-python -m venv .venv
 .\.venv\Scripts\Activate.ps1
+```
+
+Install the required packages:
+
+```bash
 python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
 ```
 
-Use a PyTorch wheel appropriate for your CUDA setup if GPU training is desired; otherwise the CPU build is supported. The code selects CUDA automatically when available.
+Install a PyTorch build appropriate for your CUDA configuration if GPU acceleration is required. CPU execution is also supported.
 
-### Quick start (PowerShell)
+## 8. Dataset Preparation
 
-```powershell
-cd "C:\Users\Divya Chitturi\OneDrive\Desktop\Deep_Geometrized_Cartoon_Line_Inbetweening\Deep_Geometrized_Cartoon_Line_Inbetweening"
-python -m pip install -r requirements.txt
-python project_check.py
-python test.py --index 0
-streamlit run app.py
+The dataset is excluded from this GitHub repository.
+
+Prepare the reduced ML240 dataset locally using:
+
+```bash
+python prepare_ml240.py --source "C:\path\to\ml240data" --output dataset --train 10 --val 2 --test 3 --size 256 --seed 42
 ```
 
-## Dataset preparation
+Replace the source path with the location of your extracted ML240 dataset.
 
-The prepared dataset is already included in this project. If it must be regenerated from the source archive, run this command from the project directory (edit the source path to the local extracted ML240 folder):
+Validate the prepared dataset:
 
-```powershell
-python prepare_ml240.py --source "C:\Users\Divya Chitturi\OneDrive\Desktop\ML240_TEMP\ml240data" --output dataset --train 10 --val 2 --test 3 --size 256 --seed 42
-```
-
-Preparation selects complete sequences without replacement and writes normalized frame/geometry pairs. Existing split data is protected; use a new `--output` directory when preparing another copy. Check the resulting structure with:
-
-```powershell
+```bash
 python validate_dataset.py
 ```
 
-## Training
+The preparation script selects complete sequences and creates training, validation, and testing splits.
 
-Project paths are anchored to each script's location, so commands may be run from another current directory by passing the script's path. From the project directory, a short run is:
+## 9. Training
 
-```powershell
+After preparing the dataset, run a short training experiment:
+
+```bash
 python train.py --epochs 10 --batch-size 2
 ```
 
-For a longer run or capped sample counts:
+For a longer experiment:
 
-```powershell
+```bash
 python train.py --epochs 30 --batch-size 4 --max-train-samples 1000 --max-val-samples 200
 ```
 
-Continue from a full training checkpoint:
+Training checkpoints, history files, and loss curves are generated locally.
 
-```powershell
-python train.py --epochs 30 --batch-size 2 --resume outputs/checkpoints/run_<timestamp>/epoch_005.pth
-```
+**Note:** A trained model checkpoint is not included in this GitHub repository. You must train the model locally or obtain a compatible checkpoint before running checkpoint-based inference and evaluation.
 
-Training is seeded, uses AdamW and validation-driven learning-rate reduction, saves per-epoch checkpoints, tracks CSV history and a PNG loss curve, and stops early when validation loss stalls. `models/best_model.pth` contains model, optimizer, scheduler, epoch, validation loss, configuration, and history. Incompatible previous weights are archived under `outputs/checkpoints/` before starting a fresh run.
+## 10. Testing and Evaluation
 
-## Testing and evaluation
+Run the evaluation script:
 
-Evaluate held-out test sample 0:
-
-```powershell
+```bash
 python test.py
 ```
 
-Choose another sample with `python test.py --index 1`. The script reports MAE, MSE, PSNR, SSIM, and binary-line Chamfer distance calculated against the selected ground-truth middle frame. It writes generated and reference PNGs, a four-panel comparison, and per-run plus latest JSON/CSV metrics under `outputs/`. Chamfer distance is `Not evaluated` when either binary line map is empty.
+To evaluate another test sample:
 
-## Streamlit application
+```bash
+python test.py --index 1
+```
 
-```powershell
+The project evaluates predictions using:
+
+- MAE (Mean Absolute Error)
+- MSE (Mean Squared Error)
+- PSNR (Peak Signal-to-Noise Ratio)
+- SSIM (Structural Similarity Index)
+- Chamfer Distance
+
+The metrics compare the generated frame against the corresponding ground-truth middle frame.
+
+Chamfer distance is not evaluated when either binary line map is empty.
+
+## 11. Run the Streamlit Application
+
+Start the application using:
+
+```bash
 streamlit run app.py
 ```
 
-DeepLine AI includes Home, Inbetweening Studio, How It Works, Geometry Analyzer, Model & Performance, and About pages. Upload PNG, JPG, JPEG, BMP, or WebP endpoint frames (WebP is offered when Pillow reports WebP support), review previews, generate and download the actual grayscale model output as PNG, inspect raw prediction/PNG diagnostics and estimated geometry, and view held-out evaluation. Each generation is saved to `outputs/generated/` with its comparison in `outputs/comparisons/`. Uploaded-image metrics are not reported because no ground truth is supplied. Home navigation and Studio reset use callbacks/key rotation to avoid mutating widget state after creation; stale session results from older schemas are discarded.
+The application provides an interface to upload two endpoint drawings and generate a candidate intermediate frame.
 
-## Existing sample result
+Users can:
+- Upload supported image formats.
+- Preview the endpoint images.
+- Generate an intermediate line-art frame.
+- Download the generated PNG.
+- Inspect estimated geometry and prediction diagnostics.
+- View held-out evaluation information.
 
-The latest local evaluation report for test sample 0 records MAE **0.01072**, MSE **0.003007**, PSNR **25.22 dB**, SSIM **0.9632**, and Chamfer distance **0.45966** (checkpoint epoch 10). These values describe that held-out sample and are not guarantees for user uploads; inference time is recorded per run and varies with CPU load.
+Uploaded-image metrics are not reported because the application does not receive ground-truth middle frames for user-provided images.
 
-## Project checks
+## 12. Inference Diagnostics
 
-```powershell
+The project includes a diagnostic script:
+
+```bash
+python diagnose_inference.py --index 0
+```
+
+It saves raw prediction information, a display PNG, and a comparison image for inspection.
+
+The testing script and Streamlit application use shared inference functions to maintain consistent model loading and prediction behavior.
+
+## 13. Existing Sample Evaluation
+
+The latest local evaluation report for test sample 0 records:
+
+| Metric | Result |
+|---|---:|
+| MAE | 0.01072 |
+| MSE | 0.003007 |
+| PSNR | 25.22 dB |
+| SSIM | 0.9632 |
+| Chamfer Distance | 0.45966 |
+
+These values correspond to one held-out test sample using the checkpoint from epoch 10. They are not guarantees of performance on other samples or user-uploaded images.
+
+## 14. Project Structure
+
+```text
+Deep-Geometrized-Cartoon-Line-Inbetweening/
+│
+├── app.py
+├── train.py
+├── test.py
+├── config.py
+├── project_check.py
+├── diagnose_inference.py
+├── prepare_ml240.py
+├── validate_dataset.py
+├── requirements.txt
+├── README.md
+│
+├── dataset/
+│   └── .gitkeep
+│
+├── models/
+│   └── .gitkeep
+│
+├── outputs/
+│   └── .gitkeep
+│
+└── src/
+    ├── __init__.py
+    ├── dataset.py
+    ├── geometry.py
+    ├── inference.py
+    ├── losses.py
+    ├── metrics.py
+    ├── model.py
+    └── preprocess.py
+```
+
+**Note:** The dataset, trained checkpoints, and generated output files are stored locally and are excluded from the public repository. The `.gitkeep` files preserve the empty directory structure.
+
+## 15. Project Validation
+
+Run the project validation script:
+
+```bash
 python project_check.py
 ```
 
-The check reports file/directory presence, package imports, dataset splits, Python syntax, and whether the existing checkpoint strictly matches the model architecture. The project does not silently bypass checkpoint mismatches.
+It checks project files, package imports, dataset structure, Python syntax, and checkpoint compatibility.
 
-## Outputs
+A compatible trained checkpoint and prepared dataset are required for the corresponding training, testing, and inference workflows.
 
-```text
-models/best_model.pth
-outputs/
-  checkpoints/
-  generated/
-  comparisons/
-  metrics/
-  training_history.csv
-  training_curves.png
-```
+## 16. Limitations and Future Improvements
 
-## Project structure
+### Current limitations
 
-```text
-app.py                    Streamlit application
-train.py / test.py        Training and held-out evaluation
-config.py                 Model, data and device settings
-project_check.py          Automated project validation
-src/model.py              Trained network architecture
-src/inference.py          Shared strict loading and prediction functions
-src/dataset.py            Sequence-level ML240 triple loader
-src/preprocess.py         Raster/geometry features and output conversion
-src/geometry.py           ML240 geometry parsing and inference estimates
-src/losses.py / metrics.py Training losses and evaluation metrics
-dataset/                  Existing reduced sequence split
-models/best_model.pth     Existing trained checkpoint
-outputs/                  Generated frames, comparisons and reports
-```
+- The training dataset is a small subset of ML240.
+- The model uses a fixed 256 × 256 training canvas.
+- Geometry estimated from uploaded raster images is approximate.
+- Restoring an output to a larger resolution cannot recover details that were not learned at the model's training resolution.
+- The implementation does not reproduce the full correspondence reasoning of the original AnimeInbet method.
+- Evaluation on one sample does not establish broad generalization.
 
-## Limitations and future work
+### Future improvements
 
-The prepared subset is small and does not establish broad generalization. The output canvas is 256 × 256 during inference; restoration to larger dimensions cannot recover detail absent from the model. Image-based inference geometry is approximate, and this system does not implement AnimeInbet's full correspondence reasoning. Future work includes broader sequence coverage, correspondence supervision, multiple-seed evaluation, and validation on distinct drawing styles.
+- Increase training dataset coverage.
+- Improve geometry estimation for uploaded drawings.
+- Explore correspondence-aware supervision.
+- Evaluate using multiple random seeds.
+- Test on different cartoon drawing styles.
+- Improve fine-detail preservation in generated frames.
 
-## License considerations
+## 17. License and Attribution
 
-Confirm ML240 / MixamoLine240 terms before redistribution or publication. Cite the dataset and AnimeInbet research paper in reports. This repository does not grant rights to redistribute either resource.
+This project is an independent student-scale implementation inspired by the AnimeInbet research paper.
 
+Please check the ML240 / MixamoLine240 dataset terms before redistributing or publishing dataset content.
 
+The repository does not grant permission to redistribute the original dataset or research materials.
 
+Cite the original AnimeInbet paper and dataset in academic reports when using their work or data.
+
+---
+
+## Author
+
+**DeepLine AI — Geometry-Aware Cartoon Line Inbetweening**
+
+GitHub Repository:
+
+https://github.com/divyanjalichitturi-lgtm/Deep-Geometrized-Cartoon-Line-Inbetweening
